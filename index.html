@@ -37,15 +37,14 @@
 <div id="loadingOverlay">
     <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
     <h4 class="mt-3 text-primary">Running Simulation...</h4>
-    <p class="text-muted">Calculating medians and mempool growth</p>
+    <p class="text-muted">Reticulating splines...</p>
     <div id="progressText" class="text-muted"></div>
 </div>
 
 <div class="container-fluid p-4">
     <h2 class="mb-4">
-        Blockchain Growth & Fee Simulator
+        Blockchain Growth & Fee Simulator. WARNING: AI GENERATED. original human code found here: https://github.com/spackle-xmr/Dynamic_Block_Demo/blob/main/Dynamic_Blocksize_econ_draft.py 
         <span class="version-badge">Corrected v2.0</span>
-        WARNING: AI GENERATED. original human code found here: https://github.com/spackle-xmr/Dynamic_Block_Demo/blob/main/Dynamic_Blocksize_econ_draft.py 
     </h2>
 
     <div class="card config-card shadow-sm">
@@ -548,6 +547,7 @@
         let M_B_archive = [];  // Full archive for LARGE_SIMULATION_MODE checks
         
         let max_MB = 0, max_Penalty = 0, max_Mempool = 0;
+        let cumulative_fees = 0;  // Total fees paid across all blocks
         let sampleRate = Math.max(1, Math.ceil(n / 1000));
 
         for (let i = 0; i < n; i++) {
@@ -768,6 +768,9 @@
             }
             block_fee_total += (blockfilled[1] - 1) * fees[blockfilled[0]];  // FIXED: -1
             
+            // Add to cumulative total
+            cumulative_fees += block_fee_total;
+            
             // Remove included tx from mempool
             for (let k = 0; k < blockfilled[0]; k++) {
                 mempool[k] = 0;
@@ -831,7 +834,7 @@
             }
         }
 
-        results.stats = { max_MB, max_Penalty, max_Mempool };
+        results.stats = { max_MB, max_Penalty, max_Mempool, cumulative_fees };
         return results;
     }
 
@@ -888,10 +891,13 @@
                 <strong>Max Mempool:</strong> ${(data.stats.max_Mempool/1000000).toFixed(2)} MB<br>
                 <strong>Max Penalty:</strong> ${data.stats.max_Penalty.toFixed(6)}<br>
                 <strong>Data Points:</strong> ${data.M_B.length}<br>
+                <hr class="my-1">
                 <strong>Final M_L:</strong> ${(data.M_L[data.M_L.length-1]/1000).toFixed(1)} kB<br>
                 <strong>Final M_S:</strong> ${(data.M_S[data.M_S.length-1]/1000).toFixed(1)} kB<br>
                 <strong>Final M_N:</strong> ${(data.M_N[data.M_N.length-1]/1000).toFixed(1)} kB<br>
-                <strong>M_S/M_L ratio:</strong> ${(data.M_S[data.M_S.length-1]/data.M_L[data.M_L.length-1]).toFixed(1)}x (capped at ${config.mnMult}x for M_N)
+                <strong>M_S/M_L ratio:</strong> ${(data.M_S[data.M_S.length-1]/data.M_L[data.M_L.length-1]).toFixed(1)}x (capped at ${config.mnMult}x for M_N)<br>
+                <hr class="my-1">
+                <strong>Total Fees Paid:</strong> ${data.stats.cumulative_fees.toFixed(6)} XMR
             `;
 
             document.getElementById('loadingOverlay').style.display = 'none';
