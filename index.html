@@ -45,11 +45,9 @@
     <h2 class="mb-4">
         Blockchain Growth & Fee Simulator
         <span class="version-badge">Corrected v2.0</span>
+        WARNING: AI GENERATED. original human code found here: https://github.com/spackle-xmr/Dynamic_Block_Demo/blob/main/Dynamic_Blocksize_econ_draft.py 
     </h2>
-    <h3 class="mb-4">
-        WARNING: AI GENERATED. Original human code can be found here: https://github.com/spackle-xmr/Dynamic_Block_Demo/blob/main/Dynamic_Blocksize_econ_draft.py
-    </h3>
-   
+
     <div class="card config-card shadow-sm">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <h5 class="m-0 text-primary">Simulation Parameters</h5>
@@ -108,6 +106,18 @@
                             <label class="form-label">T_sim (Discretization)</label>
                             <input type="number" id="t_sim" class="form-control form-control-sm" value="800">
                             <small class="form-text">Tx size step (Bytes). Granularity of sim.</small>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <label class="form-label">M_L Growth Factor</label>
+                            <input type="number" id="ml_mult" class="form-control form-control-sm" value="2" step="0.1">
+                            <small class="form-text">M_L_weight = max(min(M_B, <b>X</b>·M_L), Z_M, M_L/<b>X</b>). New=2, Old=1.7</small>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <label class="form-label">M_N Cap Factor</label>
+                            <input type="number" id="mn_mult" class="form-control form-control-sm" value="50" step="1">
+                            <small class="form-text">M_N = min(M_S, <b>X</b>·M_L). Caps short-term effect.</small>
                         </div>
                     </div>
 
@@ -281,7 +291,7 @@
     </div>
     
     <div class="row">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card chart-card">
                 <div class="card-header py-1"><strong>Long Term Median (M_L)</strong></div>
                 <div class="card-body">
@@ -291,12 +301,22 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card chart-card">
                 <div class="card-header py-1"><strong>Short Term Median (M_S)</strong></div>
                 <div class="card-body">
                     <div class="chart-container">
                         <canvas id="chartMS"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card chart-card">
+                <div class="card-header py-1"><strong>Penalty Median (M_N)</strong> = min(M_S, X×M_L)</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartMN"></canvas>
                     </div>
                 </div>
             </div>
@@ -414,6 +434,7 @@
         charts.penalty = createChart('chartPenalty', 'Penalty', '#dc3545');
         charts.ml = createChart('chartML', 'M_L', '#6f42c1');
         charts.ms = createChart('chartMS', 'M_S', '#20c997');
+        charts.mn = createChart('chartMN', 'M_N', '#e83e8c');
 
         // Initialize Combined Chart (Dual Axis)
         const ctxCombined = document.getElementById('chartCombined').getContext('2d');
@@ -467,6 +488,15 @@
         const R_Base = cfg.r_base;
         let T_sim = cfg.t_sim;
         const LARGE_SIMULATION_MODE = cfg.largeSimMode;
+        
+        // Multiplier for M_L_weight calculation
+        // NEW consensus (2021 proposal): 2x
+        // OLD consensus: 1.7x (some versions used 1.4x)
+        const ML_MULT = cfg.mlMult;
+        
+        // Multiplier for M_N cap: M_N = min(M_S, MN_MULT * M_L)
+        // Default is 50x per the Monero spec
+        const MN_MULT = cfg.mnMult;
         
         // Window Setup
         const mid_100k = cfg.mid_100k;
@@ -533,10 +563,10 @@
             let idx_L2 = sorted_M_L_list.length - 1 - mid_100k;
             let M_L = (sorted_M_L_list[idx_L1] + sorted_M_L_list[idx_L2]) / 2;
             
-            // M_L_weight uses PREVIOUS M_B (from last iteration), stored in M_B variable
-            // Python: M_L_weight = max(min(M_B, 1.7 * M_L_prev), Z_M, M_L_prev / 1.7)
-            // On first iteration, M_B = 0, so this becomes max(0, Z_M, M_L_prev/1.7) = Z_M
-            let M_L_weight = Math.max(Math.min(M_B, 1.7 * M_L_prev), Z_M, M_L_prev / 1.7);
+            // M_L_weight: value to add to M_L_list
+            // PDF NEW: M_L = median of max(min(M_B, 2*M_L), Z_M, M_L/2)
+            // PDF OLD: M_L = median of max(min(M_B, 1.7*M_L), Z_M, M_L/1.7)
+            let M_L_weight = Math.max(Math.min(M_B, ML_MULT * M_L_prev), Z_M, M_L_prev / ML_MULT);
             
             // M_S = median of sorted_M_S_list
             let idx_S1 = mid_100;
@@ -546,8 +576,8 @@
             // M_S_weight = max(M_B, M_L) - uses previous M_B
             let M_S_weight = Math.max(M_B, M_L);
             
-            // M_N = min(M_S, 50 * M_L)
-            let M_N = Math.min(M_S, 50 * M_L);
+            // M_N = min(M_S, MN_MULT * M_L) - caps short-term effect
+            let M_N = Math.min(M_S, MN_MULT * M_L);
             
             // M_B_max = 2 * M_N
             let M_B_max = 2 * M_N;
@@ -826,7 +856,9 @@
                 rampMultiplier: getVal('ramp_multiplier'),
                 addNoise: document.getElementById('add_noise').checked,
                 usersPayMore: document.getElementById('users_pay_more').checked,
-                largeSimMode: document.getElementById('large_sim_mode').checked
+                largeSimMode: document.getElementById('large_sim_mode').checked,
+                mlMult: getVal('ml_mult'),
+                mnMult: getVal('mn_mult')
             };
 
             const t0 = performance.now();
@@ -844,6 +876,7 @@
             updateChart(charts.penalty, data.indices, data.penalty);
             updateChart(charts.ml, data.indices, data.M_L);
             updateChart(charts.ms, data.indices, data.M_S);
+            updateChart(charts.mn, data.indices, data.M_N);
 
             // Update Combined Chart with current scale settings
             charts.combined.data.labels = data.indices;
@@ -856,7 +889,9 @@
                 <strong>Max Penalty:</strong> ${data.stats.max_Penalty.toFixed(6)}<br>
                 <strong>Data Points:</strong> ${data.M_B.length}<br>
                 <strong>Final M_L:</strong> ${(data.M_L[data.M_L.length-1]/1000).toFixed(1)} kB<br>
-                <strong>Final M_S:</strong> ${(data.M_S[data.M_S.length-1]/1000).toFixed(1)} kB
+                <strong>Final M_S:</strong> ${(data.M_S[data.M_S.length-1]/1000).toFixed(1)} kB<br>
+                <strong>Final M_N:</strong> ${(data.M_N[data.M_N.length-1]/1000).toFixed(1)} kB<br>
+                <strong>M_S/M_L ratio:</strong> ${(data.M_S[data.M_S.length-1]/data.M_L[data.M_L.length-1]).toFixed(1)}x (capped at ${config.mnMult}x for M_N)
             `;
 
             document.getElementById('loadingOverlay').style.display = 'none';
@@ -873,4 +908,4 @@
 
 </script>
 </body>
-</html> 
+</html>
